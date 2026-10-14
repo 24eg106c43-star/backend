@@ -1,1 +1,1 @@
--- Initial data is automatically seeded in Java (SecurityConfig) on startup if empty.
+SELECT 1;
