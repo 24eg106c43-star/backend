@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"/api", "", "/api/api"})
 public class ApiController {
     private final JdbcTemplate db;
     private final PriceService prices;

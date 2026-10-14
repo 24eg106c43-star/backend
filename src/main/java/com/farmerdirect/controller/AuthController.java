@@ -9,7 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth", "/api/api/auth"})
 public class AuthController {
     private final JdbcTemplate db;
     private final PasswordEncoder enc;

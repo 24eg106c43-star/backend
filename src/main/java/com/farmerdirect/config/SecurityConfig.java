@@ -44,14 +44,16 @@ public class SecurityConfig implements WebMvcConfigurer {
                         return true;
                     } catch (Exception ignored) { }
                 }
-                res.sendError(401, "Please login");
+                res.setStatus(401);
+                res.setContentType("application/json");
+                res.getWriter().write("{\"error\":\"Please login\"}");
                 return false;
             }
         };
 
         registry.addInterceptor(interceptor)
-                .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**");
+                .addPathPatterns("/api/**", "/api/api/**", "/products/**", "/orders/**", "/farmers/**", "/customers/**", "/price-suggestion/**", "/dashboard/**")
+                .excludePathPatterns("/api/auth/**", "/api/api/auth/**", "/auth/**", "/", "/api", "/error");
     }
 
     /** Idempotent seed sample data (farmers, products, market prices) if empty. */
