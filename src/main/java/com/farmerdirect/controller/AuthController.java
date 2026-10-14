@@ -16,6 +16,17 @@ public class AuthController {
     private final JwtService jwt;
     public AuthController(JdbcTemplate db, PasswordEncoder enc, JwtService jwt) { this.db = db; this.enc = enc; this.jwt = jwt; }
 
+    private static Object getCol(Map<String, Object> row, String col) {
+        if (row == null) return null;
+        if (row.containsKey(col)) return row.get(col);
+        if (row.containsKey(col.toUpperCase())) return row.get(col.toUpperCase());
+        if (row.containsKey(col.toLowerCase())) return row.get(col.toLowerCase());
+        for (Map.Entry<String, Object> e : row.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(col)) return e.getValue();
+        }
+        return null;
+    }
+
     private long insert(String sql, Object... args) {
         GeneratedKeyHolder kh = new GeneratedKeyHolder();
         db.update(c -> {
@@ -23,7 +34,20 @@ public class AuthController {
             for (int i = 0; i < args.length; i++) ps.setObject(i + 1, args[i]);
             return ps;
         }, kh);
-        return kh.getKey().longValue();
+        try {
+            if (kh.getKey() != null) return kh.getKey().longValue();
+        } catch (Exception ignored) { }
+        if (kh.getKeys() != null) {
+            for (Map.Entry<String, Object> e : kh.getKeys().entrySet()) {
+                if (e.getKey().toLowerCase().endsWith("id") && e.getValue() instanceof Number n) {
+                    return n.longValue();
+                }
+            }
+            for (Object v : kh.getKeys().values()) {
+                if (v instanceof Number n) return n.longValue();
+            }
+        }
+        throw new IllegalStateException("Could not retrieve generated key");
     }
     private Map<String, Object> session(String email, String role, long pid, String name) {
         return Map.of("token", jwt.generate(email, role, pid), "role", role, "profileId", pid, "name", name == null ? "" : name);
@@ -49,9 +73,12 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody Map<String, String> b) {
         List<Map<String, Object>> rows = db.queryForList("SELECT * FROM users WHERE email=?", b.getOrDefault("email", "").trim().toLowerCase());
         String pw = b.getOrDefault("password", "");
-        if (rows.isEmpty() || !enc.matches(pw, (String) rows.get(0).get("PASSWORD_HASH")))
+        if (rows.isEmpty())
             return ResponseEntity.status(401).body(Map.of("error", "Invalid email or password"));
         Map<String, Object> u = rows.get(0);
-        return ResponseEntity.ok(session((String) u.get("EMAIL"), (String) u.get("USER_ROLE"), ((Number) u.get("PROFILE_ID")).longValue(), (String) u.get("NAME")));
+        String pwHash = (String) getCol(u, "password_hash");
+        if (pwHash == null || !enc.matches(pw, pwHash))
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid email or password"));
+        return ResponseEntity.ok(session((String) getCol(u, "email"), (String) getCol(u, "user_role"), ((Number) getCol(u, "profile_id")).longValue(), (String) getCol(u, "name")));
     }
 }

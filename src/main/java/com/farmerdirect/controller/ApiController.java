@@ -16,6 +16,17 @@ public class ApiController {
     private final PriceService prices;
     public ApiController(JdbcTemplate db, PriceService prices) { this.db = db; this.prices = prices; }
 
+    private static Object getCol(Map<String, Object> row, String col) {
+        if (row == null) return null;
+        if (row.containsKey(col)) return row.get(col);
+        if (row.containsKey(col.toUpperCase())) return row.get(col.toUpperCase());
+        if (row.containsKey(col.toLowerCase())) return row.get(col.toLowerCase());
+        for (Map.Entry<String, Object> e : row.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(col)) return e.getValue();
+        }
+        return null;
+    }
+
     private long insert(String sql, Object... args) {
         GeneratedKeyHolder kh = new GeneratedKeyHolder();
         db.update(c -> {
@@ -23,7 +34,20 @@ public class ApiController {
             for (int i = 0; i < args.length; i++) ps.setObject(i + 1, args[i]);
             return ps;
         }, kh);
-        return kh.getKey().longValue();
+        try {
+            if (kh.getKey() != null) return kh.getKey().longValue();
+        } catch (Exception ignored) { }
+        if (kh.getKeys() != null) {
+            for (Map.Entry<String, Object> e : kh.getKeys().entrySet()) {
+                if (e.getKey().toLowerCase().endsWith("id") && e.getValue() instanceof Number n) {
+                    return n.longValue();
+                }
+            }
+            for (Object v : kh.getKeys().values()) {
+                if (v instanceof Number n) return n.longValue();
+            }
+        }
+        throw new IllegalStateException("Could not retrieve generated key");
     }
     private int count(String sql, Object... a) { return db.queryForObject(sql, Integer.class, a); }
     private static double num(Object o) { return Double.parseDouble(String.valueOf(o)); }
@@ -60,7 +84,7 @@ public class ApiController {
         List<Map<String, Object>> rows = db.queryForList("SELECT quantity, price FROM products WHERE product_id=?", pid);
         if (rows.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Product not found"));
         if (count("SELECT COUNT(*) FROM customers WHERE customer_id=?", cid) == 0) return ResponseEntity.badRequest().body(Map.of("error", "Unknown customer id"));
-        double stock = num(rows.get(0).get("QUANTITY")), price = num(rows.get(0).get("PRICE"));
+        double stock = num(getCol(rows.get(0), "quantity")), price = num(getCol(rows.get(0), "price"));
         if (qty <= 0 || qty > stock) return ResponseEntity.badRequest().body(Map.of("error", "Only " + stock + " available"));
         double total = qty * price;
         long id = insert("INSERT INTO orders(customer_id,product_id,quantity,total_amount,order_status) VALUES(?,?,?,?, 'PLACED')", cid, pid, qty, total);
